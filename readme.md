@@ -1,3 +1,5 @@
-# Mapillary 360 Project
+# Mapillary360
 
-Ez a repository a Mapillary 360° lefedettségi réteg előállításához készült.
+Segédprojekt a Mapillary 360° panoráma-szekvenciák letöltésére,
+GeoPackage/GeoJSON előállítására és Locus Map alatti
+GPS-alapú terepi használatra.
