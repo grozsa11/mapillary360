@@ -6,7 +6,7 @@ const status = document.getElementById("status");
 
 
 // IDE MÁSOLD BE A SAJÁT MAPILLARY TOKENEDET TESZTHEZ
-const ACCESS_TOKEN = "IDE_A_TOKEN_KERUL";
+const ACCESS_TOKEN = "MLY|27807182582227312|79dfc40dcd393eea90d9dae310bd0025";
 
 
 // Tesztpont környéke:
