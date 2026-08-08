@@ -195,7 +195,7 @@ function workerUrl() {
 return $("workerUrl")
 .value
 .trim()
-.replace(//+$/, "");
+.replace(//+$/, "")
 }
 
 function bboxString(b) {
