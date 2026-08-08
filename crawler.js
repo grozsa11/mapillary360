@@ -14,22 +14,38 @@ function $(id) {
   return document.getElementById(id);
 }
 
+function setText(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
+}
+
 function log(text, type = "") {
   const el = $("log");
-  if (!el) return;
+
+  if (!el) {
+    console.log(text);
+    return;
+  }
+
   const row = document.createElement("div");
-  if (type) row.className = type;
-  row.textContent = new Date().toLocaleTimeString() + " " + text;
+
+  if (type) {
+    row.className = type;
+  }
+
+  row.textContent =
+    new Date().toLocaleTimeString() + " " + text;
+
   el.appendChild(row);
   el.scrollTop = el.scrollHeight;
 }
 
 function updateStats() {
-  $("queue").textContent = queue.length;
-  $("visited").textContent = visited.size;
-  $("stored").textContent = stored;
-  $("splits").textContent = splits;
-  $("errors").textContent = errors;
+  setText("queue", queue.length);
+  setText("visited", visited.size);
+  setText("stored", stored);
+  setText("splits", splits);
+  setText("errors", errors);
 }
 
 function bboxKey(b) {
@@ -39,10 +55,6 @@ function bboxKey(b) {
     b.maxLon,
     b.maxLat
   ].join(",");
-}
-
-function depthOf(node) {
-  return node.depth || 0;
 }
 
 function splitBBox(b) {
@@ -79,6 +91,7 @@ function splitBBox(b) {
 
 async function callStore(node) {
   const bbox = bboxKey(node.bbox);
+
   const url =
     WORKER_URL +
     "/store?bbox=" +
@@ -92,6 +105,7 @@ async function callStore(node) {
   const text = await response.text();
 
   let data;
+
   try {
     data = JSON.parse(text);
   } catch (e) {
@@ -129,27 +143,34 @@ async function processNode(node) {
     const result = await callStore(node);
 
     if (result.needSplit === true) {
-      const depth = depthOf(node);
+      const depth = node.depth || 0;
 
       if (depth >= MAX_DEPTH) {
         errors++;
+
         log(
           key +
           " MAX DEPTH — nem spliteljük tovább",
           "error"
         );
+
         updateStats();
         return;
       }
 
-      const children = result.children || splitBBox(node.bbox);
+      const children =
+        Array.isArray(result.children) &&
+        result.children.length === 4
+          ? result.children
+          : splitBBox(node.bbox);
 
       splits++;
 
       log(
         key +
         " SPLIT → " +
-        children.map((x, i) => key + ":" + i).join(", ")
+        children.length +
+        " gyermek"
       );
 
       for (const child of children) {
@@ -168,14 +189,27 @@ async function processNode(node) {
 
       const s = result.stats || {};
 
+      const images =
+        s.totalImages ??
+        s.imagesReceived ??
+        0;
+
+      const pano =
+        s.panoImages ??
+        0;
+
+      const seq =
+        s.sequencesFound ??
+        0;
+
       log(
         key +
         " OK — images=" +
-        (s.totalImages ?? s.imagesReceived ?? "?") +
+        images +
         ", pano=" +
-        (s.panoImages ?? "?") +
+        pano +
         ", seq=" +
-        (s.sequencesFound ?? "?")
+        seq
       );
 
       updateStats();
@@ -212,7 +246,9 @@ async function workerLoop() {
   while (running) {
     if (queue.length === 0) {
       running = false;
+
       log("Crawler befejeződött.");
+
       return;
     }
 
@@ -231,30 +267,45 @@ async function workerLoop() {
 
     updateStats();
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve =>
+      setTimeout(resolve, 100)
+    );
   }
 }
 
-function readInitialBBox() {
-  const minLon = parseFloat($("minLon").value);
-  const minLat = parseFloat($("minLat").value);
-  const maxLon = parseFloat($("maxLon").value);
-  const maxLat = parseFloat($("maxLat").value);
+function readValue(id) {
+  const el = $(id);
 
-  if (
-    !Number.isFinite(minLon) ||
-    !Number.isFinite(minLat) ||
-    !Number.isFinite(maxLon) ||
-    !Number.isFinite(maxLat)
-  ) {
-    throw new Error("Érvénytelen bbox.");
+  if (!el) {
+    throw new Error(
+      "A HTML-ben nincs ilyen elem: #" + id
+    );
   }
+
+  const value = parseFloat(el.value);
+
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      "Érvénytelen érték: #" + id
+    );
+  }
+
+  return value;
+}
+
+function readInitialBBox() {
+  const minLon = readValue("minLon");
+  const minLat = readValue("minLat");
+  const maxLon = readValue("maxLon");
+  const maxLat = readValue("maxLat");
 
   if (
     minLon >= maxLon ||
     minLat >= maxLat
   ) {
-    throw new Error("Hibás bbox: min >= max.");
+    throw new Error(
+      "Hibás bbox: min érték nagyobb vagy egyenlő a max értéknél."
+    );
   }
 
   return {
@@ -274,7 +325,9 @@ function resetState() {
 }
 
 function startCrawler() {
-  if (running) return;
+  if (running) {
+    return;
+  }
 
   try {
     const bbox = readInitialBBox();
@@ -292,11 +345,13 @@ function startCrawler() {
     updateStats();
 
     running = true;
+
     workerLoop();
 
   } catch (err) {
     log(
-      "INDÍTÁSI HIBA: " + err.message,
+      "INDÍTÁSI HIBA: " +
+      err.message,
       "error"
     );
   }
@@ -309,24 +364,48 @@ function stopCrawler() {
 
 function clearLog() {
   const el = $("log");
-  if (el) el.innerHTML = "";
+
+  if (el) {
+    el.innerHTML = "";
+  }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  $("start").addEventListener(
-    "click",
-    startCrawler
-  );
+function bindClick(id, handler) {
+  const el = $(id);
 
-  $("stop").addEventListener(
-    "click",
-    stopCrawler
-  );
+  if (!el) {
+    console.warn(
+      "Hiányzó HTML elem: #" + id
+    );
+    return;
+  }
 
-  $("clear").addEventListener(
+  el.addEventListener(
     "click",
-    clearLog
+    handler
   );
+}
 
-  updateStats();
-});
+window.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    bindClick(
+      "start",
+      startCrawler
+    );
+
+    bindClick(
+      "stop",
+      stopCrawler
+    );
+
+    bindClick(
+      "clear",
+      clearLog
+    );
+
+    updateStats();
+
+    log("Crawler betöltve.");
+  }
+);
